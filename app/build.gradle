@@ -1,6 +1,8 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.jetbrains.kotlin.android)
+    alias(libs.plugins.hilt.android)
+    alias(libs.plugins.kotlin.kapt)
 }
 
 android {
@@ -75,12 +77,15 @@ dependencies {
     implementation libs.activity.compose
     implementation libs.work.runtime.ktx
     implementation libs.gson
+
     // Coroutines
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3'
+
     // Lifecycle and LiveData
     implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0'
     implementation 'androidx.lifecycle:lifecycle-livedata-ktx:2.7.0'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
     implementation 'androidx.compose.runtime:runtime-livedata:1.5.4'
 
     // Navigation Compose
@@ -90,13 +95,38 @@ dependencies {
     implementation 'androidx.media3:media3-exoplayer:1.2.0'
     implementation 'androidx.media3:media3-ui:1.2.0'
     implementation 'androidx.media3:media3-common:1.2.0'
+    implementation 'androidx.media3:media3-transformer:1.2.0'
+    implementation 'androidx.media3:media3-effect:1.2.0'
 
     // Compose Icons Extended
     implementation 'androidx.compose.material:material-icons-extended:1.5.4'
 
-    // Optional: Google Play Services (disabled for now)
-    // implementation 'com.google.android.gms:play-services-drive:17.0.0'
-    // implementation 'com.google.cloud:google-cloud-speech:1.29.0'
+    // Dependency Injection - Hilt
+    implementation libs.hilt.android
+    kapt libs.hilt.compiler
+    implementation libs.hilt.navigation.compose
+
+    // Hilt WorkManager
+    implementation 'androidx.hilt:hilt-work:1.1.0'
+    kapt 'androidx.hilt:hilt-compiler:1.1.0'
+
+    // Image Loading - Coil
+    implementation libs.coil.compose
+    implementation libs.coil.video
+
+    // Database - Room
+    implementation libs.room.runtime
+    implementation libs.room.ktx
+    kapt libs.room.compiler
+
+    // DataStore
+    implementation libs.datastore.preferences
+
+    // Accompanist
+    implementation libs.accompanist.permissions
+    implementation libs.accompanist.systemuicontroller
+
+    // Testing
     testImplementation libs.junit
     androidTestImplementation libs.ext.junit
     androidTestImplementation libs.espresso.core
