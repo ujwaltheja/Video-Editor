@@ -53,14 +53,6 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideRenderingEngine(
-        @ApplicationContext context: Context
-    ): RenderingEngine {
-        return RenderingEngineImpl(context)
-    }
-
-    @Provides
-    @Singleton
     fun provideEffectsEngine(
         @ApplicationContext context: Context
     ): EffectsEngine {
@@ -71,6 +63,22 @@ object AppModule {
     @Singleton
     fun provideTransitionEngine(): TransitionEngine {
         return TransitionEngineImpl()
+    }
+
+    @Provides
+    @Singleton
+    fun provideColorGradingEngine(): ColorGradingEngine {
+        return ColorGradingEngineImpl()
+    }
+
+    @Provides
+    @Singleton
+    fun provideRenderingEngine(
+        @ApplicationContext context: Context,
+        effectsEngine: EffectsEngine,
+        transitionEngine: TransitionEngine
+    ): RenderingEngine {
+        return RenderingEngineImpl(context, effectsEngine, transitionEngine)
     }
 
     @Provides
