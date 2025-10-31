@@ -22,6 +22,19 @@ class ExportEngineImpl @Inject constructor(
 
     private var isCancelled = false
 
+    private data class EncoderContext(
+        val videoEncoder: MediaCodec,
+        val audioEncoder: MediaCodec?,
+        val muxer: MediaMuxer,
+        var videoTrackIndex: Int = -1,
+        var audioTrackIndex: Int = -1,
+        var muxerStarted: Boolean = false
+    )
+
+    companion object {
+        private const val TIMEOUT_USEC = 10000L // 10ms timeout
+    }
+
     override suspend fun exportProject(
         project: VideoProject,
         preset: ExportPreset,
@@ -58,27 +71,29 @@ class ExportEngineImpl @Inject constructor(
             val frameDurationUs = 1_000_000L / settings.frameRate
 
             // Setup encoder
-            val encoder = setupEncoder(settings, outputPath)
-            val muxer = MediaMuxer(outputPath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            val encoderCtx = setupEncoder(settings, outputPath)
+            encoderCtx.videoEncoder.start()
+            encoderCtx.audioEncoder?.start()
 
             // Encoding phase
             emit(ExportProgress(0, totalFrames, 0f, 0, 0, ExportStatus.ENCODING))
 
             var currentFrame = 0
             var currentTimeMs = 0L
+            val bufferInfo = MediaCodec.BufferInfo()
 
             while (currentTimeMs < project.duration && !isCancelled) {
                 // Render frame
                 val frame = renderingEngine.renderFrame(project, currentTimeMs)
 
                 if (frame != null) {
-                    // Encode frame
-                    // TODO: Actual encoding with MediaCodec
+                    // Encode frame using MediaCodec
+                    encodeFrame(encoderCtx, frame, currentFrame * frameDurationUs, bufferInfo)
                     currentFrame++
 
                     val elapsed = System.currentTimeMillis() - startTime
                     val progressPercent = (currentFrame.toFloat() / totalFrames) * 100f
-                    val estimatedTotal = (elapsed / progressPercent) * 100
+                    val estimatedTotal = if (progressPercent > 0) (elapsed / progressPercent) * 100 else 0
                     val remaining = estimatedTotal - elapsed
 
                     emit(
@@ -98,16 +113,28 @@ class ExportEngineImpl @Inject constructor(
 
             if (isCancelled) {
                 emit(ExportProgress(currentFrame, totalFrames, 0f, 0, 0, ExportStatus.CANCELLED))
+                encoderCtx.videoEncoder.release()
+                encoderCtx.audioEncoder?.release()
+                encoderCtx.muxer.release()
                 return@flow
             }
 
-            // Finalizing
+            // Finalizing - signal end of stream and drain encoders
             emit(ExportProgress(totalFrames, totalFrames, 100f, 0, 0, ExportStatus.FINALIZING))
 
+            signalEndOfStream(encoderCtx.videoEncoder)
+            drainEncoder(encoderCtx, bufferInfo, isEndOfStream = true)
+
             // Release encoder and muxer
-            encoder?.release()
-            muxer.stop()
-            muxer.release()
+            encoderCtx.videoEncoder.stop()
+            encoderCtx.videoEncoder.release()
+            encoderCtx.audioEncoder?.stop()
+            encoderCtx.audioEncoder?.release()
+
+            if (encoderCtx.muxerStarted) {
+                encoderCtx.muxer.stop()
+            }
+            encoderCtx.muxer.release()
 
             // Completed
             emit(
@@ -304,13 +331,232 @@ class ExportEngineImpl @Inject constructor(
         return ((project.duration / 1000f) * frameRate).toInt()
     }
 
-    private fun setupEncoder(settings: ExportSettings, outputPath: String): MediaCodec? {
-        // TODO: Implement actual MediaCodec encoder setup
-        // This would configure:
-        // - Video encoder with H.264/H.265
-        // - Audio encoder with AAC
-        // - MediaMuxer for MP4 container
-        // - Hardware acceleration if available
-        return null
+    private fun encodeFrame(
+        encoderCtx: EncoderContext,
+        frame: android.graphics.Bitmap,
+        presentationTimeUs: Long,
+        bufferInfo: MediaCodec.BufferInfo
+    ) {
+        val encoder = encoderCtx.videoEncoder
+
+        // Get input buffer
+        val inputBufferIndex = encoder.dequeueInputBuffer(TIMEOUT_USEC)
+        if (inputBufferIndex >= 0) {
+            val inputBuffer = encoder.getInputBuffer(inputBufferIndex)
+            inputBuffer?.let {
+                // Convert bitmap to YUV420 and copy to buffer
+                val yuvData = bitmapToYUV420(frame)
+                it.clear()
+                it.put(yuvData)
+
+                encoder.queueInputBuffer(
+                    inputBufferIndex,
+                    0,
+                    yuvData.size,
+                    presentationTimeUs,
+                    0
+                )
+            }
+        }
+
+        // Drain encoder
+        drainEncoder(encoderCtx, bufferInfo, isEndOfStream = false)
+    }
+
+    private fun drainEncoder(
+        encoderCtx: EncoderContext,
+        bufferInfo: MediaCodec.BufferInfo,
+        isEndOfStream: Boolean
+    ) {
+        val encoder = encoderCtx.videoEncoder
+        val timeout = if (isEndOfStream) TIMEOUT_USEC else 0L
+
+        while (true) {
+            val outputBufferIndex = encoder.dequeueOutputBuffer(bufferInfo, timeout)
+
+            when {
+                outputBufferIndex == MediaCodec.INFO_TRY_AGAIN_LATER -> {
+                    if (!isEndOfStream) break
+                }
+                outputBufferIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                    // Add track to muxer
+                    if (!encoderCtx.muxerStarted) {
+                        encoderCtx.videoTrackIndex = encoderCtx.muxer.addTrack(encoder.outputFormat)
+
+                        // Check if we should start muxer (start when all tracks added)
+                        val shouldStart = encoderCtx.audioEncoder == null || encoderCtx.audioTrackIndex >= 0
+                        if (shouldStart) {
+                            encoderCtx.muxer.start()
+                            encoderCtx.muxerStarted = true
+                        }
+                    }
+                }
+                outputBufferIndex >= 0 -> {
+                    val outputBuffer = encoder.getOutputBuffer(outputBufferIndex)
+                    outputBuffer?.let {
+                        if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0) {
+                            // Codec config data - ignore
+                            bufferInfo.size = 0
+                        }
+
+                        if (bufferInfo.size != 0 && encoderCtx.muxerStarted) {
+                            // Write to muxer
+                            it.position(bufferInfo.offset)
+                            it.limit(bufferInfo.offset + bufferInfo.size)
+                            encoderCtx.muxer.writeSampleData(encoderCtx.videoTrackIndex, it, bufferInfo)
+                        }
+
+                        encoder.releaseOutputBuffer(outputBufferIndex, false)
+
+                        if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
+                            break
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun signalEndOfStream(encoder: MediaCodec) {
+        val inputBufferIndex = encoder.dequeueInputBuffer(TIMEOUT_USEC)
+        if (inputBufferIndex >= 0) {
+            encoder.queueInputBuffer(
+                inputBufferIndex,
+                0,
+                0,
+                0,
+                MediaCodec.BUFFER_FLAG_END_OF_STREAM
+            )
+        }
+    }
+
+    private fun bitmapToYUV420(bitmap: android.graphics.Bitmap): ByteArray {
+        val width = bitmap.width
+        val height = bitmap.height
+        val yuvSize = width * height * 3 / 2
+
+        val yuv = ByteArray(yuvSize)
+        val argb = IntArray(width * height)
+
+        bitmap.getPixels(argb, 0, width, 0, 0, width, height)
+
+        var yIndex = 0
+        var uvIndex = width * height
+
+        for (j in 0 until height) {
+            for (i in 0 until width) {
+                val index = j * width + i
+                val R = (argb[index] shr 16) and 0xFF
+                val G = (argb[index] shr 8) and 0xFF
+                val B = argb[index] and 0xFF
+
+                // Convert RGB to YUV
+                val Y = ((66 * R + 129 * G + 25 * B + 128) shr 8) + 16
+                val U = ((-38 * R - 74 * G + 112 * B + 128) shr 8) + 128
+                val V = ((112 * R - 94 * G - 18 * B + 128) shr 8) + 128
+
+                yuv[yIndex++] = Y.coerceIn(0, 255).toByte()
+
+                // Sample U and V every 2x2 pixels
+                if (j % 2 == 0 && i % 2 == 0) {
+                    yuv[uvIndex++] = U.coerceIn(0, 255).toByte()
+                    yuv[uvIndex++] = V.coerceIn(0, 255).toByte()
+                }
+            }
+        }
+
+        return yuv
+    }
+
+    private fun setupEncoder(settings: ExportSettings, outputPath: String): EncoderContext {
+        val mimeType = when (settings.videoCodec) {
+            VideoCodec.H264 -> MediaFormat.MIMETYPE_VIDEO_AVC
+            VideoCodec.H265_HEVC -> MediaFormat.MIMETYPE_VIDEO_HEVC
+            VideoCodec.VP9 -> MediaFormat.MIMETYPE_VIDEO_VP9
+            VideoCodec.AV1 -> "video/av01" // MediaFormat.MIMETYPE_VIDEO_AV1 for API 29+
+        }
+
+        // Setup video encoder
+        val videoFormat = MediaFormat.createVideoFormat(
+            mimeType,
+            settings.resolution.width,
+            settings.resolution.height
+        ).apply {
+            setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
+            setInteger(MediaFormat.KEY_BIT_RATE, settings.videoBitrate * 1000) // Convert kbps to bps
+            setInteger(MediaFormat.KEY_FRAME_RATE, settings.frameRate)
+            setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1) // I-frame every 1 second
+
+            // Enable hardware acceleration if requested
+            if (settings.hardwareAcceleration) {
+                setInteger(MediaFormat.KEY_PROFILE, when (settings.videoCodec) {
+                    VideoCodec.H264 -> MediaCodecInfo.CodecProfileLevel.AVCProfileHigh
+                    VideoCodec.H265_HEVC -> MediaCodecInfo.CodecProfileLevel.HEVCProfileMain
+                    else -> 0
+                })
+            }
+        }
+
+        val videoEncoder = if (settings.hardwareAcceleration) {
+            try {
+                MediaCodec.createEncoderByType(mimeType)
+            } catch (e: Exception) {
+                // Fallback to software encoder
+                MediaCodec.createByCodecName(findSoftwareCodec(mimeType) ?: throw e)
+            }
+        } else {
+            MediaCodec.createEncoderByType(mimeType)
+        }
+
+        videoEncoder.configure(videoFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+
+        // Setup audio encoder (AAC)
+        val audioEncoder = try {
+            val audioMimeType = when (settings.audioCodec) {
+                AudioCodec.AAC -> MediaFormat.MIMETYPE_AUDIO_AAC
+                AudioCodec.MP3 -> MediaFormat.MIMETYPE_AUDIO_MPEG
+                AudioCodec.OPUS -> MediaFormat.MIMETYPE_AUDIO_OPUS
+                AudioCodec.FLAC -> MediaFormat.MIMETYPE_AUDIO_FLAC
+            }
+
+            val audioFormat = MediaFormat.createAudioFormat(
+                audioMimeType,
+                settings.audioSampleRate,
+                2 // Stereo
+            ).apply {
+                setInteger(MediaFormat.KEY_BIT_RATE, settings.audioBitrate * 1000)
+                setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
+            }
+
+            val encoder = MediaCodec.createEncoderByType(audioMimeType)
+            encoder.configure(audioFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            encoder
+        } catch (e: Exception) {
+            null // Audio encoding optional
+        }
+
+        // Setup muxer
+        val muxerFormat = when (settings.format) {
+            ContainerFormat.MP4 -> MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4
+            ContainerFormat.WEBM -> MediaMuxer.OutputFormat.MUXER_OUTPUT_WEBM
+            else -> MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4
+        }
+
+        val muxer = MediaMuxer(outputPath, muxerFormat)
+
+        return EncoderContext(
+            videoEncoder = videoEncoder,
+            audioEncoder = audioEncoder,
+            muxer = muxer
+        )
+    }
+
+    private fun findSoftwareCodec(mimeType: String): String? {
+        val codecList = MediaCodecList(MediaCodecList.ALL_CODECS)
+        return codecList.codecInfos
+            .filter { !it.isHardwareAccelerated && it.isEncoder }
+            .firstOrNull { codecInfo ->
+                codecInfo.supportedTypes.any { it.equals(mimeType, ignoreCase = true) }
+            }?.name
     }
 }
