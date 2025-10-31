@@ -1,0 +1,44 @@
+package uc.ucworks.videosnap
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.Button
+import androidx.compose.material.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+
+@Composable
+fun ThemeSettingsScreen(
+    primaryColor: MutableState<Color>,
+    secondaryColor: MutableState<Color>
+) {
+    Column {
+        Text(text = "Theme Settings")
+        Row {
+            Text(text = "Primary Color")
+            Spacer(modifier = Modifier.weight(1f))
+            ColorPicker(color = primaryColor)
+        }
+        Row {
+            Text(text = "Secondary Color")
+            Spacer(modifier = Modifier.weight(1f))
+            ColorPicker(color = secondaryColor)
+        }
+    }
+}
+
+@Composable
+fun ColorPicker(color: MutableState<Color>) {
+    Row {
+        Box(modifier = Modifier.size(24.dp).background(Color.Red).clickable { color.value = Color.Red })
+        Box(modifier = Modifier.size(24.dp).background(Color.Green).clickable { color.value = Color.Green })
+         Box(modifier = Modifier.size(24.dp).background(Color.Blue).clickable { color.value = Color.Blue })
+    }
+}

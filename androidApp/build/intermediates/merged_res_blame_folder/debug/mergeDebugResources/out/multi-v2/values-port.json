@@ -1,0 +1,19 @@
+{
+    "logs": [
+        {
+            "outputFile": "uc.ucworks.videosnap.androidApp-mergeDebugResources-66:/values-port/values-port.xml",
+            "map": [
+                {
+                    "source": "C:\\Users\\theja\\.gradle\\caches\\8.13\\transforms\\8a54f149f26e199c5f13f1dbe16d9d76\\transformed\\appcompat-1.7.1\\res\\values-port\\values-port.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "55",
+                        "endOffsets": "106"
+                    }
+                }
+            ]
+        }
+    ]
+}

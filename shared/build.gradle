@@ -1,0 +1,28 @@
+plugins {
+    id 'org.jetbrains.kotlin.multiplatform'
+    id 'com.android.library'
+}
+
+kotlin {
+    androidTarget {
+        compilations.all {
+            kotlinOptions.jvmTarget = "1.8"
+        }
+    }
+    sourceSets {
+        commonMain {
+            dependencies {
+                implementation "org.jetbrains.kotlin:kotlin-stdlib"
+                implementation "androidx.compose.ui:ui-graphics:1.6.2"
+            }
+        }
+    }
+}
+
+android {
+    namespace 'uc.ucworks.videosnap.shared'
+    compileSdk 34
+    defaultConfig {
+        minSdk 24
+    }
+}

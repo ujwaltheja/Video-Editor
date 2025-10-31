@@ -1,0 +1,10 @@
+package uc.ucworks.videosnap.ui.theme
+
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.graphics.Color
+import androidx.lifecycle.ViewModel
+
+class ThemeViewModel : ViewModel() {
+    val primaryColor = mutableStateOf(Color.Blue)
+    val secondaryColor = mutableStateOf(Color.Cyan)
+}

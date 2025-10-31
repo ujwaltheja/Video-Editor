@@ -1,0 +1,30 @@
+package uc.ucworks.videosnap
+
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
+
+/**
+ * A modifier that makes a composable draggable.
+ *
+ * @param data The data to be associated with the draggable item.
+ * @return A [Modifier] that makes the composable draggable.
+ */
+@Composable
+fun Modifier.draggable(data: Any): Modifier {
+    val state = LocalDragDropState.current
+    return pointerInput(Unit) {
+        detectDragGesturesAfterLongPress(
+            onDragStart = { offset ->
+                state.draggedItem = data
+            },
+            onDrag = { change, dragAmount ->
+                state.dragOffset += dragAmount
+            },
+            onDragEnd = {
+                state.draggedItem = null
+            }
+        )
+    }
+}

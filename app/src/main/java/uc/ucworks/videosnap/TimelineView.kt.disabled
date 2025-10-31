@@ -1,0 +1,117 @@
+package uc.ucworks.videosnap
+
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+
+/**
+ * A composable that displays the timeline.
+ *
+ * @param tracks A list of timeline tracks.
+ * @param duration The total duration of the timeline.
+ * @param progress The current progress of the timeline.
+ * @param onSeek A callback that is invoked when the user seeks the timeline.
+ * @param onDrop A callback that is invoked when the user drops an item on the timeline.
+ * @param onResize A callback that is invoked when the user resizes a clip.
+ * @param onAddTrack A callback that is invoked when the user adds a track.
+ * @param onRemoveTrack A callback that is invoked when the user removes a track.
+ * @param onTrackHeightChange A callback that is invoked when the user changes the height of a track.
+ */
+@Composable
+fun TimelineView(
+    tracks: List<TimelineTrack>,
+    duration: Long,
+    progress: Float,
+    onSeek: (Float) -> Unit,
+    onDrop: (Any, Int) -> Unit,
+    onResize: (TimelineClip, Long, Long) -> Unit,
+    onAddTrack: () -> Unit,
+    onRemoveTrack: (Int) -> Unit,
+    onTrackHeightChange: (Int, Float) -> Unit
+) {
+    val dragInfo = LocalDragTargetInfo.current
+
+    Column {
+        Button(onClick = { onAddTrack() }) {
+            Icon(Icons.Default.Add, contentDescription = "Add Track")
+        }
+
+        DragAndDropContainer {
+            Column {
+                tracks.forEachIndexed { index, track ->
+                    var isCurrentDropTarget by remember { mutableStateOf(false) }
+                    var trackHeight by remember { mutableStateOf(100f) }
+
+                    Column {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(trackHeight.dp)
+                                .dropTarget(dragInfo, onDrop = { item ->
+                                    onDrop(item, index)
+                                }, onDragEnter = {
+                                    isCurrentDropTarget = true
+                                }, onDragExit = {
+                                    isCurrentDropTarget = false
+                                })
+                                .border(
+                                    width = if (isCurrentDropTarget) 2.dp else 0.dp,
+                                    color = if (isCurrentDropTarget) Color.Red else Color.Transparent
+                                )
+                        ) {
+                            track.clips.forEach { clip ->
+                                var waveform by remember(clip.mediaPath) { mutableStateOf<List<Int>>(emptyList()) }
+
+                                LaunchedEffect(clip.mediaPath) {
+                                    waveform = AudioWaveformGenerator.generateWaveformData(clip.mediaPath)
+                                }
+                                TimelineClipView(
+                                    clip = clip,
+                                    duration = duration,
+                                    waveform = waveform,
+                                    onResize = { newStart, newEnd ->
+                                        onResize(clip, newStart, newEnd)
+                                    },
+                                    modifier = Modifier.draggable(clip)
+                                )
+                            }
+                        }
+                        Row {
+                            IconButton(onClick = { onRemoveTrack(index) }) {
+                                Icon(Icons.Default.Remove, contentDescription = "Remove Track")
+                            }
+                            Slider(
+                                value = trackHeight,
+                                onValueChange = { trackHeight = it },
+                                valueRange = 50f..200f,
+                                onValueChangeFinished = {
+                                    onTrackHeightChange(index, trackHeight)
+                                }
+                            )
+                        }
+                    }
+                }
+                SeekBar(progress = progress, onSeek = onSeek)
+            }
+        }
+    }
+}

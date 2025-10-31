@@ -1,0 +1,45 @@
+package uc.ucworks.videosnap
+
+import android.content.Context
+import com.google.cloud.speech.v1.RecognitionAudio
+import com.google.cloud.speech.v1.RecognitionConfig
+import com.google.cloud.speech.v1.SpeechClient
+import com.google.cloud.speech.v1.SpeechRecognitionAlternative
+import com.google.cloud.speech.v1.SpeechRecognitionResult
+import com.google.protobuf.ByteString
+import java.io.File
+
+class SpeechToTextManager(private val context: Context) {
+
+    fun extractAudio(videoPath: String, outPath: String): Result<Unit> {
+        return MltHelper.exportVideo(videoPath, outPath, ExportPreset("wav", 0, 0, 0))
+    }
+
+    fun recognize(audioPath: String, onRecognized: (List<SubtitleData>) -> Unit) {
+        val speechClient = SpeechClient.create()
+        val audioBytes = ByteString.copyFrom(File(audioPath).readBytes())
+        val config = RecognitionConfig.newBuilder()
+            .setEncoding(RecognitionConfig.AudioEncoding.LINEAR16)
+            .setSampleRateHertz(16000)
+            .setLanguageCode("en-US")
+            .setEnableWordTimeOffsets(true)
+            .build()
+        val audio = RecognitionAudio.newBuilder()
+            .setContent(audioBytes)
+            .build()
+
+        val response = speechClient.recognize(config, audio)
+        val results = response.resultsList
+
+        val subtitles = results.flatMap { result ->
+            result.alternativesList.map { alternative ->
+                val text = alternative.transcript
+                val startTime = alternative.wordsList.first().startTime.seconds * 1000 + alternative.wordsList.first().startTime.nanos / 1000000
+                val endTime = alternative.wordsList.last().endTime.seconds * 1000 + alternative.wordsList.last().endTime.nanos / 1000000
+                SubtitleData(text, startTime, endTime)
+            }
+        }
+
+        onRecognized(subtitles)
+    }
+}

@@ -1,0 +1,82 @@
+package uc.ucworks.videosnap
+
+import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+
+/**
+ * A composition local for providing drag and drop information.
+ */
+val LocalDragTargetInfo = compositionLocalOf { DragTargetInfo() }
+
+/**
+ * A container that provides drag and drop functionality.
+ *
+ * @param modifier The modifier to apply to the container.
+ * @param content The content of the container.
+ */
+@Composable
+fun DragAndDropContainer(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    val dragTargetInfo = remember { DragTargetInfo() }
+    CompositionLocalProvider(LocalDragTargetInfo provides dragTargetInfo) {
+        Box(modifier = modifier) {
+            content()
+            if (dragTargetInfo.isDragging) {
+                var targetSize by remember { mutableStateOf(Offset.Zero) }
+                Box(
+                    modifier = Modifier
+                        .onGloballyPositioned { 
+                            targetSize = Offset(it.size.width.toFloat(), it.size.height.toFloat())
+                        }
+                        .graphicsLayer {
+                            val offset = (dragTargetInfo.dragPosition + dragTargetInfo.dragOffset)
+                            alpha = if (targetSize == Offset.Zero) 0f else 1f
+                            translationX = offset.x - targetSize.x / 2
+                            translationY = offset.y - targetSize.y / 2
+                        }
+                ) {
+                    dragTargetInfo.draggableComposable?.invoke()
+                }
+            }
+        }
+    }
+}
+
+/**
+ * A class that holds information about a drag and drop operation.
+ */
+class DragTargetInfo {
+    /**
+     * Whether an item is being dragged.
+     */
+    var isDragging: Boolean by mutableStateOf(false)
+    /**
+     * The current position of the dragged item.
+     */
+    var dragPosition: Offset by mutableStateOf(Offset.Zero)
+    /**
+     * The offset of the drag from the start of the drag operation.
+     */
+    var dragOffset: Offset by mutableStateOf(Offset.Zero)
+    /**
+     * The composable that is being dragged.
+     */
+    var draggableComposable: (@Composable () -> Unit)? by mutableStateOf(null)
+    /**
+     * The data that is being dragged.
+     */
+    var dataToDrop: Any? by mutableStateOf(null)
+}

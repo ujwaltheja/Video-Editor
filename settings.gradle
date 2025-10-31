@@ -20,4 +20,5 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "Video Snap"
+include ':shared'
 include ':app'

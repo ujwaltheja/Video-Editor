@@ -1,0 +1,14 @@
+[
+    {
+        "merged": "uc.ucworks.videosnap.androidApp-debug-68:/xml_data_extraction_rules.xml.flat",
+        "source": "uc.ucworks.videosnap.androidApp-main-70:/xml/data_extraction_rules.xml"
+    },
+    {
+        "merged": "uc.ucworks.videosnap.androidApp-debug-68:/xml_backup_rules.xml.flat",
+        "source": "uc.ucworks.videosnap.androidApp-main-70:/xml/backup_rules.xml"
+    },
+    {
+        "merged": "uc.ucworks.videosnap.androidApp-debug-68:/layout_activity_main.xml.flat",
+        "source": "uc.ucworks.videosnap.androidApp-main-70:/layout/activity_main.xml"
+    }
+]

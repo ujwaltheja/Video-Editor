@@ -1,0 +1,9 @@
+package uc.ucworks.videosnap
+
+object DefaultOnboardingPages {
+    val pages = listOf(
+        OnboardingPage("Welcome to VideoSnap", "The ultimate video editing app", R.drawable.ic_launcher_foreground),
+        OnboardingPage("Multi-track Timeline", "Edit your videos with precision", R.drawable.ic_launcher_foreground),
+        OnboardingPage("Export and Share", "Share your creations with the world", R.drawable.ic_launcher_foreground)
+    )
+}

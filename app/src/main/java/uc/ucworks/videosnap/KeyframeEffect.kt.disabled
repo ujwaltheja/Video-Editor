@@ -1,0 +1,27 @@
+package uc.ucworks.videosnap
+
+/**
+ * A class that represents a keyframe effect.
+ *
+ * @property property The name of the property to animate.
+ * @property keyframes A list of keyframes.
+ */
+class KeyframeEffect(
+    val property: String,
+    val keyframes: List<Keyframe>
+) {
+    /**
+     * Applies the keyframe effect to a producer.
+     *
+     * @param producer The producer to apply the effect to.
+     */
+    fun apply(producer: Mlt.Producer) {
+        val filter = Mlt.Filter(producer.get_profile(), "affine")
+        var transition = ""
+        for (keyframe in keyframes) {
+            transition += "${keyframe.time}=${keyframe.value};"
+        }
+        filter.set(property, transition)
+        producer.attach(filter)
+    }
+}

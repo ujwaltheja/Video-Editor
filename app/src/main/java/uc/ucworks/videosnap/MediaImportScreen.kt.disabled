@@ -1,0 +1,85 @@
+package uc.ucworks.videosnap
+
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.Button
+import androidx.compose.material.CircularProgressIndicator
+import androidx.compose.material.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount
+import com.google.android.gms.drive.Metadata
+import java.io.File
+
+/**
+ * A composable that displays the media import screen.
+ *
+ * @param onImportFromLocal A callback that is invoked when the user imports a file from local storage.
+ */
+@Composable
+fun MediaImportScreen(onImportFromLocal: (String) -> Unit) {
+    val context = LocalContext.current
+    val googleDriveManager = remember { GoogleDriveManager(context) }
+    var googleSignInAccount by remember { mutableStateOf<GoogleSignInAccount?>(null) }
+    var googleDriveFiles by remember { mutableStateOf<List<Metadata>>(emptyList()) }
+    var isDownloading by remember { mutableStateOf(false) }
+
+    val googleSignInLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val data: Intent? = result.data
+        if (result.resultCode == android.app.Activity.RESULT_OK && data != null) {
+            googleDriveManager.handleSignInResult(data) { account ->
+                googleSignInAccount = account
+                googleDriveManager.listFiles(account) { files ->
+                    googleDriveFiles = files
+                }
+            }
+        }
+    }
+
+    Column {
+        Text(text = "Import Media")
+        Button(onClick = { onImportFromLocal("") }) {
+            Text(text = "Import from Local Storage")
+        }
+        Button(onClick = { /* TODO: Implement camera import */ }) {
+            Text(text = "Import from Camera")
+        }
+        if (googleSignInAccount == null) {
+            Button(onClick = { googleSignInLauncher.launch(googleDriveManager.getSignInIntent()) }) {
+                Text(text = "Sign in with Google")
+            }
+        } else {
+            Text(text = "Signed in as ${googleSignInAccount?.displayName}")
+            if (isDownloading) {
+                CircularProgressIndicator()
+            } else {
+                LazyColumn {
+                    items(googleDriveFiles) {
+                        file ->
+                        Row {
+                            Text(text = file.title)
+                            Button(onClick = { 
+                                isDownloading = true
+                                val outFile = File(context.cacheDir, file.title)
+                                googleDriveManager.downloadFile(googleSignInAccount!!, file, outFile) {
+                                    isDownloading = false
+                                    onImportFromLocal(outFile.absolutePath)
+                                }
+                            }) {
+                                Text(text = "Download")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

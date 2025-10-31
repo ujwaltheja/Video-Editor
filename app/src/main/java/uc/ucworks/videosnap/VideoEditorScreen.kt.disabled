@@ -1,0 +1,8 @@
+package uc.ucworks.videosnap
+
+import androidx.compose.runtime.Composable
+
+@Composable
+fun VideoEditorScreen() {
+    // This is a placeholder file to fix the build.
+}

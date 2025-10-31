@@ -1,26 +1,23 @@
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.jetbrains.kotlin.android)
 }
 
 android {
     namespace 'uc.ucworks.videosnap'
-    compileSdk {
-        version = release(36)
-    }
+    compileSdk 34
 
     defaultConfig {
         applicationId "uc.ucworks.videosnap"
         minSdk 24
-        targetSdk 36
+        targetSdk 34
         versionCode 1
         versionName "1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        // externalNativeBuild {
-        //     cmake {
-        //         cppFlags '-std=c++17'
-        //     }
-        // }
+        vectorDrawables {
+            useSupportLibrary true
+        }
     }
 
     buildTypes {
@@ -30,27 +27,71 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_21
-        targetCompatibility JavaVersion.VERSION_21
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
     }
-    // externalNativeBuild {
-    //     cmake {
-    //         path file('src/main/cpp/CMakeLists.txt')
-    //         version '3.22.1'
-    //     }
-    // }
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
     buildFeatures {
-        // viewBinding true
+        compose true
+    }
+    // Ensure Compose compiler extension matches the version in gradle/libs.versions.toml
+    composeOptions {
+        // Matches [versions].compose-compiler in gradle/libs.versions.toml
+        kotlinCompilerExtensionVersion libs.versions.compose.compiler.get()
+    }
+    // Only configure the native CMake build if the MLT headers exist. This prevents
+    // CMake from failing with "Mlt.h file not found" when the native libraries/headers
+    // are not present in the repo (common for projects that expect prebuilt libs).
+    if (file('src/main/cpp/libs/include/Mlt.h').exists()) {
+        externalNativeBuild {
+            cmake {
+                path file('src/main/cpp/CMakeLists.txt')
+                version '3.22.1'
+            }
+        }
+    } else {
+        // No MLT headers found; skip native build. To enable native, add MLT includes
+        // and libraries under src/main/cpp/libs and remove this guard.
+    }
+    packagingOptions {
+        resources {
+            excludes += '/META-INF/{AL2.0,LGPL2.1}'
+        }
     }
 }
 
 dependencies {
+    implementation project(':shared')
     implementation libs.appcompat
     implementation libs.material
     implementation libs.constraintlayout
+    implementation platform(libs.compose.bom)
+    implementation libs.compose.ui
+    implementation libs.compose.ui.graphics
+    implementation libs.compose.ui.tooling.preview
+    implementation libs.compose.material3
+    implementation libs.activity.compose
+    implementation libs.work.runtime.ktx
+    implementation libs.gson
+    // Coroutines
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3'
+    // Lifecycle and LiveData
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0'
+    implementation 'androidx.lifecycle:lifecycle-livedata-ktx:2.7.0'
+    implementation 'androidx.compose.runtime:runtime-livedata:1.5.4'
+    // Optional: Google Play Services (disabled for now)
+    // implementation 'com.google.android.gms:play-services-drive:17.0.0'
+    // implementation 'com.google.cloud:google-cloud-speech:1.29.0'
     testImplementation libs.junit
     androidTestImplementation libs.ext.junit
     androidTestImplementation libs.espresso.core
+    androidTestImplementation platform(libs.compose.bom)
+    androidTestImplementation 'androidx.compose.ui:ui-test-junit4'
+    debugImplementation 'androidx.compose.ui:ui-tooling'
+    debugImplementation 'androidx.compose.ui:ui-test-manifest'
 
     // No external FFmpeg dependency - using Android's built-in MediaCodec APIs
 }
