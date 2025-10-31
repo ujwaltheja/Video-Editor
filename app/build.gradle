@@ -82,6 +82,15 @@ dependencies {
     implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0'
     implementation 'androidx.lifecycle:lifecycle-livedata-ktx:2.7.0'
     implementation 'androidx.compose.runtime:runtime-livedata:1.5.4'
+
+    // ExoPlayer for video playback
+    implementation 'androidx.media3:media3-exoplayer:1.2.0'
+    implementation 'androidx.media3:media3-ui:1.2.0'
+    implementation 'androidx.media3:media3-common:1.2.0'
+
+    // Compose Icons Extended
+    implementation 'androidx.compose.material:material-icons-extended:1.5.4'
+
     // Optional: Google Play Services (disabled for now)
     // implementation 'com.google.android.gms:play-services-drive:17.0.0'
     // implementation 'com.google.cloud:google-cloud-speech:1.29.0'
