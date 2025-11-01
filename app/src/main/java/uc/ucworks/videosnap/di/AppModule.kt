@@ -105,4 +105,18 @@ object AppModule {
     ): ExportEngine {
         return ExportEngineImpl(context, renderingEngine, effectsEngine, audioEngine)
     }
+
+    @Provides
+    @Singleton
+    fun provideTextEngine(): TextEngine {
+        return TextEngineImpl()
+    }
+
+    @Provides
+    @Singleton
+    fun provideChromaKeyEngine(
+        @ApplicationContext context: Context
+    ): ChromaKeyEngine {
+        return ChromaKeyEngineImpl(context)
+    }
 }
